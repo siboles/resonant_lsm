@@ -1,0 +1,31 @@
+package:
+  name: resonant_lsm
+  version: 0.0
+
+source:
+  git_url: https://github.com/siboles/resonant_lsm.git
+  git_rev: 0.0
+
+requirements:
+  build:
+    - python
+    - vtk 9.0.1
+    - simpleitk 2.0.*
+    - pyyaml 5.4.1
+    - numpy 1.21.1
+  run:
+    - python
+    - vtk 9.0.1
+    - simpleitk 2.0.*
+    - pyyaml 5.4.1
+    - numpy 1.21.1
+
+test:
+  imports:
+    - resonant_lsm.segmenter
+
+about:
+  home: https://github.com/siboles/resonant_lsm
+  summary: A package for object segmentation from 3-D laser scanning microscopy images;
+           particularly, those obtained with resonance scanning.
+  license: BSD-3 License
