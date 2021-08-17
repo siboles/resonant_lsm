@@ -1,4 +1,6 @@
 *.nii
+*.vtk
+*.vti
 *.pyc
 src/dist/*
 src/resonant_lsm.egg-info/*
