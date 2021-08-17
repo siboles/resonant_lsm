@@ -1,0 +1,11 @@
+name: resonant_lsm
+channels:
+  - SimpleITK
+  - siboles
+  - conda-forge
+dependencies:
+  - python
+  - vtk >=9.0
+  - simpleitk >=2.0
+  - pyyaml >=5.4
+  - numpy >=1.21
