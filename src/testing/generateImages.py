@@ -94,14 +94,20 @@ def _pack_objects(objects, spacing):
     return scene.GetOutput()
 
 
-def _deform_poly_data(p, spacing, scale):
+def _deform_poly_data(p, divisions, scale):
     # create thin-plate spline control po0.05ints
     bounds = p.GetBounds()
-    step_size = np.array([spacing] * 3) * 10
-    div = [np.ceil(np.abs(bounds[2 * i + 1] - bounds[2 * i]) / step_size[i]).astype(int) for i in range(3)]
-    x, x_step = np.linspace(bounds[0], bounds[1], div[0], retstep=True)
-    y, y_step = np.linspace(bounds[2], bounds[3], div[1], retstep=True)
-    z, z_step = np.linspace(bounds[4], bounds[5], div[2], retstep=True)
+    x_edge = bounds[1] - bounds[0]
+    y_edge = bounds[3] - bounds[2]
+    z_edge = bounds[5] - bounds[4]
+    min_edge = np.min([x_edge, y_edge, z_edge])
+    ratios = np.array([x_edge, y_edge, z_edge]) / min_edge
+    knots = np.ceil(divisions * ratios).astype(int)
+    # step_size = np.array([spacing] * 3) * 3
+    # div = [np.ceil(np.abs(bounds[2 * i + 1] - bounds[2 * i]) / step_size[i]).astype(int) for i in range(3)]
+    x, x_step = np.linspace(bounds[0], bounds[1], knots[0], retstep=True)
+    y, y_step = np.linspace(bounds[2], bounds[3], knots[1], retstep=True)
+    z, z_step = np.linspace(bounds[4], bounds[5], knots[2], retstep=True)
     source_points = np.meshgrid(x, y, z)
     x_perturb = np.random.normal(loc=0.0, scale=scale * x_step, size=source_points[0].size)
     y_perturb = np.random.normal(loc=0.0, scale=scale * y_step, size=source_points[1].size)
@@ -130,6 +136,7 @@ def _deform_poly_data(p, spacing, scale):
     transform.SetSourceLandmarks(source_points)
     transform.SetTargetLandmarks(target_points)
     transform.SetBasisToR()
+    transform.SetSigma(2.0)
 
     poly_transform = vtk.vtkTransformPolyDataFilter()
     poly_transform.SetInputData(p)
@@ -140,7 +147,7 @@ def _deform_poly_data(p, spacing, scale):
     return polydata
 
 
-def _poly2img(p, spacing, object_noise, background_noise):
+def _poly2img(p, spacing, shot_noise, background_noise):
     bb = np.array(p.GetBounds())
     extent = [np.ceil(np.abs(bb[2 * i + 1] - bb[2 * i]) / spacing).astype(int) + 10 for i in range(3)]
 
@@ -178,14 +185,9 @@ def _poly2img(p, spacing, object_noise, background_noise):
 
     mask = sitk.BinaryThreshold(itk_img, 0.5, 1e3)
 
-    # object_noise_img = sitk.AdditiveGaussianNoise(itk_img, standardDeviation=object_noise)
-    # object_noise_img = sitk.RescaleIntensity(object_noise_img, 0.0, 1.0) * itk_img
-    # background_noise_img = sitk.AdditiveGaussianNoise(itk_img,
-    #                                                   standardDeviation=background_noise) * sitk.InvertIntensity(
-    #    itk_img, maximum=1.0)
-    # background_noise_img = sitk.RescaleIntensity(background_noise_img, 0.0, background_noise)
-    # itk_img = object_noise_img + background_noise_img
-    itk_img = sitk.ShotNoise(itk_img, scale=object_noise)
+    itk_img = sitk.AdditiveGaussianNoise(itk_img, standardDeviation=background_noise)
+    itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
+    itk_img = sitk.ShotNoise(itk_img, scale=1.0 / shot_noise)
     itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
     labels = sitk.ConnectedComponent(mask)
     ls = sitk.LabelShapeStatisticsImageFilter()
@@ -198,9 +200,16 @@ def _poly2img(p, spacing, object_noise, background_noise):
         regions.append(origin + size)
     return itk_img, regions
 
+def write_polydata(polydata, name):
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetInputData(polydata)
+    writer.SetFileName('{}.vtk'.format(name))
+    writer.Update()
+    writer.Write()
+
 
 def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, output=None, number=1,
-                         deformed=0, object_noise=0.3, background_noise=0.1):
+                         deformed=0, shot_noise=0.1, background_noise=0.05):
     """
     Description
     -----------
@@ -210,11 +219,11 @@ def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, outpu
     Parameters
     ----------
     a : float=2.0
-       The x-radius of the super-ellipsoid.
+       The x-semi-axis of the super-ellipsoid.
     b : float=1.0
-       The y-radius of the super-ellipsoid.
+       The y-semi-axis of the super-ellipsoid.
     c : float=1.0
-       The z-radius of the super-ellipsoid.
+       The z-semi-axis of the super-ellipsoid.
     n1 : float 0.9
        Shape parameter in v; (0.0, 1.0] ranges from squared to ellipsoidal corners, > 1.0 concave surface with sharp
        edges.
@@ -229,7 +238,7 @@ def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, outpu
        Number of reference images to generate.
     deformed : int=0
        Number of deformed images to create from each reference image.
-    object_noise : float=0.3
+    shot_noise : float=0.3
        Standard deviation of Gaussian noise to add to objects in images.
     background_noise : float=0.1
        Standard deviation of Gaussian noise to add to background of images.
@@ -265,16 +274,23 @@ def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, outpu
         objects.append(_generate_super_ellipsoid(a[i], b[i], c[i], n1, n2))
 
     polydata = _pack_objects(objects, spacing)
-    ref_polydata = _deform_poly_data(polydata, spacing, 0.1)
-    ref_img, regions = _poly2img(ref_polydata, spacing, object_noise, background_noise)
+
+    # Number of control points on shortest bounding box edge
+    divisions = 2
+    # Ratio of edge division length to perturb control points by
+    scale = 0.05
+    ref_polydata = _deform_poly_data(polydata, divisions, scale)
+    ref_img, regions = _poly2img(ref_polydata, spacing, shot_noise, background_noise)
 
     all_regions = {"reference": [regions], "deformed": []}
     sitk.WriteImage(ref_img, os.path.join(root, "ref.nii"))
+    write_polydata(ref_polydata, 'ref')
     for i in range(deformed):
-        def_polydata = _deform_poly_data(ref_polydata, spacing, 0.1)
-        def_img, regions = _poly2img(def_polydata, spacing, object_noise, background_noise)
+        def_polydata = _deform_poly_data(ref_polydata, divisions, scale)
+        def_img, regions = _poly2img(def_polydata, spacing, shot_noise, background_noise)
         all_regions["deformed"].append(regions)
         sitk.WriteImage(def_img, os.path.join(root, "def_{:03d}.nii".format(i + 1)))
+        write_polydata(def_polydata, 'def_{:03d}'.format(i + 1))
     return root, all_regions
 
 
@@ -282,9 +298,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Generates 3D image(s) of cell-like geometry. Optionally, generate reference and deformed pairs. '
                     'If number > 1 then radii are varied +/- 15%.')
-    parser.add_argument('-a', type=float, default=2.0, help='float : x-radius of base super-ellipsoid')
-    parser.add_argument('-b', type=float, default=1.0, help='float : y-radius of base super-ellipsoid')
-    parser.add_argument('-c', type=float, default=1.0, help='float : z-radius of base super-ellipsoid')
+    parser.add_argument('-a', type=float, default=2.5, help='float : x-semi-axis of base super-ellipsoid')
+    parser.add_argument('-b', type=float, default=1.0, help='float : y-semi-axis of base super-ellipsoid')
+    parser.add_argument('-c', type=float, default=1.0, help='float : z-semi-axis of base super-ellipsoid')
     parser.add_argument('-n1', type=float, default=0.9,
                         help='float : shape parameter in v; (0.0,1.0) square to rounded corners '
                              '1.0 is ellipsoid, > 1.0 concave with sharp edges')
@@ -295,11 +311,11 @@ if __name__ == '__main__':
     parser.add_argument('-output', type=str, default=None, help='str : output directory to write images to')
     parser.add_argument('-number', type=int, default=1, help='int : how many clustered cells to generate')
     parser.add_argument('-deformed', type=int, default=0, help='int : how many deformed images to generate.')
-    parser.add_argument('-object_noise', type=float, default=0.3,
-                        help='float : standard deviation of Gaussian noise to add to objects in images.')
-    parser.add_argument('-background_noise', type=float, default=0.1,
+    parser.add_argument('-shot_noise', type=float, default=0.1,
+                        help='float : scale of shot noise to add to images. Fraction of mean voxel intensity.')
+    parser.add_argument('-background_noise', type=float, default=0.05,
                         help='float : standard deviation of Gaussian noise to add to background of images.')
     args = parser.parse_args()
     generate_test_images(a=args.a, b=args.b, c=args.c, n1=args.n1, n2=args.n2, spacing=args.spacing, output=args.output,
-                         deformed=args.deformed, number=args.number, object_noise=args.object_noise,
+                         deformed=args.deformed, number=args.number, shot_noise=args.shot_noise,
                          background_noise=args.background_noise)
