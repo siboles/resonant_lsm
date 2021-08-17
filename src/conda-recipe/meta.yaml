@@ -9,16 +9,16 @@ source:
 requirements:
   build:
     - python
-    - vtk 9.0.1
-    - simpleitk 2.0.*
-    - pyyaml 5.4.1
-    - numpy 1.21.1
+    - vtk >=9.0
+    - simpleitk >=2.0
+    - pyyaml >=5.4
+    - numpy >=1.21
   run:
     - python
-    - vtk 9.0.1
-    - simpleitk 2.0.*
-    - pyyaml 5.4.1
-    - numpy 1.21.1
+    - vtk >=9.0
+    - simpleitk >=2.0
+    - pyyaml >=5.4
+    - numpy >=1.21
 
 test:
   imports:
