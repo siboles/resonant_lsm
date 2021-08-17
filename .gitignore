@@ -1,3 +1,9 @@
+*.nii
+*.pyc
+src/dist/*
+src/resonant_lsm.egg-info/*
+src/build/*
+.idea/*
 *neomake*.py
 __pycache__
 
