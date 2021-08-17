@@ -187,8 +187,9 @@ def _poly2img(p, spacing, shot_noise, background_noise):
 
     itk_img = sitk.AdditiveGaussianNoise(itk_img, standardDeviation=background_noise)
     itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
-    itk_img = sitk.ShotNoise(itk_img, scale=1.0 / shot_noise)
-    itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
+    if shot_noise >= 0.05:
+        itk_img = sitk.ShotNoise(itk_img, scale=1.0 / shot_noise)
+        itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
     labels = sitk.ConnectedComponent(mask)
     ls = sitk.LabelShapeStatisticsImageFilter()
     ls.Execute(labels)
@@ -207,8 +208,31 @@ def write_polydata(polydata, name):
     writer.Update()
     writer.Write()
 
+def write_image_as_vtk(image, name):
+    """
+    Save image to disk as a .vti file. Image will be resampled such that it has spacing equal
+    to that specified in *options["Image"]["spacing"]*.
 
-def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, output=None, number=1,
+    Parameters
+    ----------
+    name : str, required
+        Name of file to save to disk without the file suffix
+    """
+    print("... Saving Image to {:s}.vti".format(name))
+    a = numpy_support.numpy_to_vtk(sitk.GetArrayFromImage(image).ravel(),
+                                   deep=True, array_type=vtk.VTK_FLOAT)
+    vtk_img = vtk.vtkImageData()
+    vtk_img.SetOrigin(image.GetOrigin())
+    vtk_img.SetSpacing(image.GetSpacing())
+    vtk_img.SetDimensions(image.GetSize())
+    vtk_img.GetPointData().SetScalars(a)
+    writer = vtk.vtkXMLImageDataWriter()
+    writer.SetFileName("{:s}.vti".format(name))
+    writer.SetInputData(vtk_img)
+    writer.Write()
+
+
+def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, output=None, number=1,
                          deformed=0, shot_noise=0.1, background_noise=0.05):
     """
     Description
@@ -218,11 +242,11 @@ def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, outpu
 
     Parameters
     ----------
-    a : float=2.0
+    a : float=2.5
        The x-semi-axis of the super-ellipsoid.
-    b : float=1.0
+    b : float=1.2
        The y-semi-axis of the super-ellipsoid.
-    c : float=1.0
+    c : float=0.8
        The z-semi-axis of the super-ellipsoid.
     n1 : float 0.9
        Shape parameter in v; (0.0, 1.0] ranges from squared to ellipsoidal corners, > 1.0 concave surface with sharp
@@ -284,13 +308,15 @@ def generate_test_images(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=0.1, outpu
 
     all_regions = {"reference": [regions], "deformed": []}
     sitk.WriteImage(ref_img, os.path.join(root, "ref.nii"))
-    write_polydata(ref_polydata, 'ref')
+    write_image_as_vtk(ref_img, os.path.join(root, 'ref'))
+    write_polydata(ref_polydata, os.path.join(root, 'ref'))
     for i in range(deformed):
         def_polydata = _deform_poly_data(ref_polydata, divisions, scale)
         def_img, regions = _poly2img(def_polydata, spacing, shot_noise, background_noise)
         all_regions["deformed"].append(regions)
         sitk.WriteImage(def_img, os.path.join(root, "def_{:03d}.nii".format(i + 1)))
-        write_polydata(def_polydata, 'def_{:03d}'.format(i + 1))
+        write_image_as_vtk(def_img, os.path.join(root, "def{:03d}".format(i + 1)))
+        write_polydata(def_polydata, os.path.join(root, 'def_{:03d}'.format(i + 1)))
     return root, all_regions
 
 
@@ -299,8 +325,8 @@ if __name__ == '__main__':
         description='Generates 3D image(s) of cell-like geometry. Optionally, generate reference and deformed pairs. '
                     'If number > 1 then radii are varied +/- 15%.')
     parser.add_argument('-a', type=float, default=2.5, help='float : x-semi-axis of base super-ellipsoid')
-    parser.add_argument('-b', type=float, default=1.0, help='float : y-semi-axis of base super-ellipsoid')
-    parser.add_argument('-c', type=float, default=1.0, help='float : z-semi-axis of base super-ellipsoid')
+    parser.add_argument('-b', type=float, default=1.2, help='float : y-semi-axis of base super-ellipsoid')
+    parser.add_argument('-c', type=float, default=0.8, help='float : z-semi-axis of base super-ellipsoid')
     parser.add_argument('-n1', type=float, default=0.9,
                         help='float : shape parameter in v; (0.0,1.0) square to rounded corners '
                              '1.0 is ellipsoid, > 1.0 concave with sharp edges')
