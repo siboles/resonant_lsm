@@ -149,7 +149,9 @@ def _deform_poly_data(p, divisions, scale):
 
 def _poly2img(p, spacing, shot_noise, background_noise):
     bb = np.array(p.GetBounds())
-    extent = [np.ceil(np.abs(bb[2 * i + 1] - bb[2 * i]) / spacing).astype(int) + 10 for i in range(3)]
+    extent = [np.ceil(np.abs(bb[2 * i + 1] - bb[2 * i]) / spacing).astype(int) for i in range(3)]
+    growth = np.ceil(np.array(extent) * 1.0).astype(int)
+    extent = [e + g for e, g in zip(extent, growth)]
 
     arr = numpy_support.numpy_to_vtk(np.ones(extent, np.float32).ravel(), deep=True, array_type=vtk.VTK_FLOAT)
     arr.SetName('Intensity')
@@ -158,9 +160,9 @@ def _poly2img(p, spacing, shot_noise, background_noise):
     img = vtk.vtkImageData()
     img.SetSpacing([spacing] * 3)
     img.SetExtent((0, extent[0] - 1, 0, extent[1] - 1, 0, extent[2] - 1))
-    img.SetOrigin([bb[0] - 5 * spacing,
-                   bb[2] - 5 * spacing,
-                   bb[4] - 5 * spacing])
+    img.SetOrigin([bb[0] - np.ceil(0.5 * growth[0]) * spacing,
+                   bb[2] - np.ceil(0.5 * growth[1]) * spacing,
+                   bb[4] - np.ceil(0.5 * growth[2]) * spacing])
     img.GetPointData().SetScalars(arr)
     p2im = vtk.vtkPolyDataToImageStencil()
     p2im.SetInputData(p)
@@ -193,13 +195,13 @@ def _poly2img(p, spacing, shot_noise, background_noise):
     labels = sitk.ConnectedComponent(mask)
     ls = sitk.LabelShapeStatisticsImageFilter()
     ls.Execute(labels)
-    regions = []
+    seeds = []
     for label in ls.GetLabels():
         bb = ls.GetBoundingBox(label)
         origin = [i - 2 for i in bb[0:3]]
-        size = [i + 4 for i in bb[3:]]
-        regions.append(origin + size)
-    return itk_img, regions
+        seed = [o + (i + 4) // 2 for o, i in zip(origin, bb[3:])]
+        seeds.append(seed)
+    return itk_img, seeds
 
 def write_polydata(polydata, name):
     writer = vtk.vtkPolyDataWriter()
@@ -304,20 +306,20 @@ def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, outpu
     # Ratio of edge division length to perturb control points by
     scale = 0.05
     ref_polydata = _deform_poly_data(polydata, divisions, scale)
-    ref_img, regions = _poly2img(ref_polydata, spacing, shot_noise, background_noise)
+    ref_img, seeds = _poly2img(ref_polydata, spacing, shot_noise, background_noise)
 
-    all_regions = {"reference": [regions], "deformed": []}
+    all_seeds = {"reference": [seeds], "deformed": []}
     sitk.WriteImage(ref_img, os.path.join(root, "ref.nii"))
     write_image_as_vtk(ref_img, os.path.join(root, 'ref'))
     write_polydata(ref_polydata, os.path.join(root, 'ref'))
     for i in range(deformed):
         def_polydata = _deform_poly_data(ref_polydata, divisions, scale)
-        def_img, regions = _poly2img(def_polydata, spacing, shot_noise, background_noise)
-        all_regions["deformed"].append(regions)
+        def_img, seeds = _poly2img(def_polydata, spacing, shot_noise, background_noise)
+        all_seeds["deformed"].append(seeds)
         sitk.WriteImage(def_img, os.path.join(root, "def_{:03d}.nii".format(i + 1)))
         write_image_as_vtk(def_img, os.path.join(root, "def{:03d}".format(i + 1)))
         write_polydata(def_polydata, os.path.join(root, 'def_{:03d}'.format(i + 1)))
-    return root, all_regions
+    return root, all_seeds
 
 
 if __name__ == '__main__':
