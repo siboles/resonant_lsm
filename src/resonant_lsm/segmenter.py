@@ -83,9 +83,9 @@ class segmenter():
                 if origin[j] + tmp_bounding_box[j] > self.image.GetSize()[j] - 1:
                     tmp_bounding_box[j] -= origin[j] + tmp_bounding_box[j] - self.image.GetSize()[j]
             roi = sitk.RegionOfInterest(self.image, tmp_bounding_box.tolist(), origin)
-            self.segmentROI(roi, [s], i)
-            self.makeSurface(self.levelsets[-1])
-            self.writeSurface(self.isocontours[-1], i + 1)
+            self.segment_region_of_interest(roi, [s], i)
+            self.make_surface(self.levelsets[-1])
+            self.write_surface(self.isocontours[-1], i + 1)
 
     def parse_config(self):
         with open(self.config) as user:
@@ -126,7 +126,7 @@ class segmenter():
         img.SetSpacing(self.spacing)
         self.image = img
 
-    def segmentROI(self, roi, seedpoint, counter):
+    def segment_region_of_interest(self, roi, seedpoint, counter):
         roi = sitk.RescaleIntensity(roi, 0, 1)
         print('... Cell {:03d}'.format(counter + 1))
         if self.equalization_fraction > 0:
@@ -138,14 +138,15 @@ class segmenter():
         self.write_image_as_vtk(initial, 'initial')
         print('... ... Segmenting')
         sc = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
-        sc.SetLambda1(0.8)
-        sc.SetEpsilon(1.0)
-        sc.SetCurvatureWeight(1.0)
-        sc.SetHeavisideStepFunction(1)
-        sc.SetNumberOfIterations(50)
+        sc.SetLambda1(0.9)
+        sc.SetEpsilon(2.0)
+        sc.SetCurvatureWeight(0.0)
+        sc.SetAreaWeight(0.0)
+        sc.UseImageSpacingOff()
+        sc.SetNumberOfIterations(100)
         sc.SetMaximumRMSError(0.02)
         ls = sc.Execute(sitk.Cast(initial, sitk.sitkFloat32),
-                        equalized * 255)
+                        resampled * 255)
 
         print('... ... ... Final Metric Value: {}'.format(sc.GetRMSChange()))
         print('... ... ... Number of iterations: {}'.format(sc.GetNumberOfIterations()))
@@ -190,7 +191,7 @@ class segmenter():
             if label != best_label:
                 mask = mask + sitk.Cast(components == label,
                                         sitk.sitkUInt8)
-        mask2 = sitk.BinaryDilate(components == best_label, [1, 1, 1])
+        mask2 = sitk.BinaryDilate(components == best_label, [4, 4, 4])
         mask2 = sitk.InvertIntensity(mask2, 1)
         mask = sitk.BinaryThreshold(levelset, 0.1, 1e7)
         mask = mask * mask2
@@ -206,12 +207,14 @@ class segmenter():
                 initial[i, j, initial.GetSize()[2] - 1] = 1
         for i in range(initial.GetSize()[0]):
             for j in range(initial.GetSize()[2]):
-                initial[i, 0, j] = 0
+                initial[i, 0, j] = 1
                 initial[i, initial.GetSize()[1] - 1, j] = 1
         for i in range(initial.GetSize()[1]):
             for j in range(initial.GetSize()[2]):
                 initial[0, i, j] = 1
+                initial[initial.GetSize()[0] - 1, i, j] = 1
         return initial
+
 
     def _resample(self, seedpoint, image):
         print('... ... Resampling to isotropic voxel')
@@ -241,41 +244,32 @@ class segmenter():
             Name of file to save to disk without the file suffix
         """
         print("... Saving Image to {:s}.vti".format(name))
-        image = sitk.Cast(image, sitk.sitkFloat32)
-        a = numpy_to_vtk(sitk.GetArrayFromImage(image).ravel(),
-                         deep=True, array_type=vtk.VTK_FLOAT)
-        vtk_img = vtk.vtkImageData()
-        vtk_img.SetOrigin(image.GetOrigin())
-        vtk_img.SetSpacing(image.GetSpacing())
-        vtk_img.SetDimensions(image.GetSize())
-        vtk_img.GetPointData().SetScalars(a)
+        vtk_img = self._convert_sitk_to_vtk(image)
         writer = vtk.vtkXMLImageDataWriter()
         writer.SetFileName("{:s}.vti".format(name))
         writer.SetInputData(vtk_img)
         writer.Write()
 
-    def makeSurface(self, ls):
-        origin = list(ls.GetOrigin())
-        spacing = list(ls.GetSpacing())
-        dimensions = list(ls.GetSize())
-
-        vtkimage = vtk.vtkImageData()
-        vtkimage.SetOrigin(origin)
-        vtkimage.SetSpacing(spacing)
-        vtkimage.SetDimensions(dimensions)
-
+    def _convert_sitk_to_vtk(self, image):
+        image = sitk.Cast(image, sitk.sitkFloat32)
         pixel_type = {1: vtk.VTK_UNSIGNED_CHAR,
                       3: vtk.VTK_UNSIGNED_INT,
                       8: vtk.VTK_FLOAT,
                       9: vtk.VTK_DOUBLE}
-
-        intensities = numpy_to_vtk(sitk.GetArrayFromImage(ls).ravel(), deep=True,
-                                   array_type=pixel_type[ls.GetPixelID()])
+        intensities = numpy_to_vtk(sitk.GetArrayFromImage(image).ravel(),
+                                   deep=True, array_type=pixel_type[image.GetPixelID()])
         intensities.SetName("Intensity")
         intensities.SetNumberOfComponents(1)
+        vtk_img = vtk.vtkImageData()
+        vtk_img.SetOrigin(image.GetOrigin())
+        vtk_img.SetSpacing(image.GetSpacing())
+        vtk_img.SetDimensions(image.GetSize())
+        vtk_img.GetPointData().SetScalars(intensities)
+        return vtk_img
 
-        vtkimage.GetPointData().SetScalars(intensities)
-        vtkimage = vtkimage
+    def make_surface(self, ls):
+        vtkimage = self._convert_sitk_to_vtk(ls)
+
         iso = vtk.vtkContourFilter()
         iso.SetInputData(vtkimage)
         iso.ComputeScalarsOff()
@@ -326,7 +320,7 @@ class segmenter():
 
         self.isocontours.append(isocontour)
 
-    def writeSurface(self, iso, counter):
+    def write_surface(self, iso, counter):
         writer = vtk.vtkSTLWriter()
         writer.SetFileName(os.path.join(self.output_dir, 'cell_{:03d}.stl'.format(counter)))
         writer.SetInputData(iso)
@@ -334,5 +328,5 @@ class segmenter():
 
 
 if __name__ == '__main__':
-    seg = segmenter('', '', [1.0, 1.0, 1.0], 0.25, 0.2, [100, 100, 20], [])
+    seg = segmenter(config=sys.argv[-1])
     seg.execute()

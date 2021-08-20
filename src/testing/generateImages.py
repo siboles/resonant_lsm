@@ -169,7 +169,7 @@ def _poly2img(p, spacing, shot_noise, background_noise):
     p2im.SetOutputOrigin(img.GetOrigin())
     p2im.SetOutputSpacing(img.GetSpacing())
     p2im.SetOutputWholeExtent(img.GetExtent())
-    p2im.SetTolerance(spacing / 10.0)
+    p2im.SetTolerance(spacing)
     p2im.Update()
 
     image_stencil = vtk.vtkImageStencil()
@@ -190,7 +190,7 @@ def _poly2img(p, spacing, shot_noise, background_noise):
     itk_img = sitk.AdditiveGaussianNoise(itk_img, standardDeviation=background_noise)
     itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
     if shot_noise >= 0.05:
-        itk_img = sitk.ShotNoise(itk_img, scale=1.0 / shot_noise)
+        itk_img = sitk.SpeckleNoise(itk_img, standardDeviation=shot_noise)
         itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
     labels = sitk.ConnectedComponent(mask)
     ls = sitk.LabelShapeStatisticsImageFilter()
