@@ -135,7 +135,6 @@ class segmenter():
             equalized = roi
         seedpoint, resampled = self._resample(seedpoint, equalized)
         initial = self._create_initial_levelset(resampled)
-        self.write_image_as_vtk(initial, 'initial')
         print('... ... Segmenting')
         sc = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
         sc.SetLambda1(0.9)
