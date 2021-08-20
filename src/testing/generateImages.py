@@ -235,7 +235,7 @@ def write_image_as_vtk(image, name):
 
 
 def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, output=None, number=1,
-                         deformed=0, shot_noise=0.1, background_noise=0.05):
+                         deformed=0, speckle_noise=0.1, background_noise=0.05):
     """
     Description
     -----------
@@ -264,10 +264,10 @@ def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, outpu
        Number of reference images to generate.
     deformed : int=0
        Number of deformed images to create from each reference image.
-    shot_noise : float=0.3
-       Standard deviation of Gaussian noise to add to objects in images.
+    speckle_noise : float=0.3
+       Standard deviation of Gamma distributed speckle noise to add to images.
     background_noise : float=0.1
-       Standard deviation of Gaussian noise to add to background of images.
+       Standard deviation of Gaussian noise to add to images.
 
     Returns
     -------
@@ -306,7 +306,7 @@ def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, outpu
     # Ratio of edge division length to perturb control points by
     scale = 0.05
     ref_polydata = _deform_poly_data(polydata, divisions, scale)
-    ref_img, seeds = _poly2img(ref_polydata, spacing, shot_noise, background_noise)
+    ref_img, seeds = _poly2img(ref_polydata, spacing, speckle_noise, background_noise)
 
     all_seeds = {"reference": [seeds], "deformed": []}
     sitk.WriteImage(ref_img, os.path.join(root, "ref.nii"))
@@ -314,7 +314,7 @@ def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, outpu
     write_polydata(ref_polydata, os.path.join(root, 'ref'))
     for i in range(deformed):
         def_polydata = _deform_poly_data(ref_polydata, divisions, scale)
-        def_img, seeds = _poly2img(def_polydata, spacing, shot_noise, background_noise)
+        def_img, seeds = _poly2img(def_polydata, spacing, speckle_noise, background_noise)
         all_seeds["deformed"].append(seeds)
         sitk.WriteImage(def_img, os.path.join(root, "def_{:03d}.nii".format(i + 1)))
         write_image_as_vtk(def_img, os.path.join(root, "def{:03d}".format(i + 1)))
@@ -339,11 +339,11 @@ if __name__ == '__main__':
     parser.add_argument('-output', type=str, default=None, help='str : output directory to write images to')
     parser.add_argument('-number', type=int, default=1, help='int : how many clustered cells to generate')
     parser.add_argument('-deformed', type=int, default=0, help='int : how many deformed images to generate.')
-    parser.add_argument('-shot_noise', type=float, default=0.1,
+    parser.add_argument('-speckle_noise', type=float, default=0.1,
                         help='float : scale of shot noise to add to images. Fraction of mean voxel intensity.')
     parser.add_argument('-background_noise', type=float, default=0.05,
                         help='float : standard deviation of Gaussian noise to add to background of images.')
     args = parser.parse_args()
     generate_test_images(a=args.a, b=args.b, c=args.c, n1=args.n1, n2=args.n2, spacing=args.spacing, output=args.output,
-                         deformed=args.deformed, number=args.number, shot_noise=args.shot_noise,
+                         deformed=args.deformed, number=args.number, speckle_noise=args.speckle_noise,
                          background_noise=args.background_noise)
