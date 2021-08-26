@@ -10,13 +10,13 @@ from vtk.util.numpy_support import numpy_to_vtk
 import numpy as np
 
 
-class segmenter():
+class segmenter:
     def __init__(self,
                  config: str = '',
                  image_directory: str = '',
                  spacing: list[float, float, float] = (1.0, 1.0, 1.0),
                  equalization_fraction: float = 0.25,
-                 levelset_smoothing_scale: float = 0.2,
+                 levelset_smoothing_radius: int = 2,
                  bounding_box: list[int] = (100, 100, 20),
                  seed_points: list[list[int, int, int]] = ()):
         """
@@ -33,8 +33,8 @@ class segmenter():
         equalization_fraction : float
             Window size use for histogram equalization as a fraction of regions of interest edge lengths.
             0 to turn off equalization.
-        levelset_smoothing_scale : float
-            Standard deviation of Gaussian used for smoothing levelsets. No smoothing performed if 0.
+        levelset_smoothing_radius : int
+            Radius in voxels of median filter used for smoothing levelsets. No smoothing performed if 0.
         bounding_box : [int, int, int]
             Region to consider around each seed point during segmentation.
         seed_points : [[int, int, int],...[int,int, int]]
@@ -56,19 +56,20 @@ class segmenter():
         self.image_directory = image_directory
         self.spacing = spacing
         self.equalization_fraction = equalization_fraction
-        self.levelset_smoothing_scale = levelset_smoothing_scale
+        self.levelset_smoothing_radius = levelset_smoothing_radius
         self.bounding_box = bounding_box
         self.seed_points = seed_points
 
         if len(self.config) > 0:
             self.parse_config()
 
+        self.image = None
         self.output_dir = '_'.join([self.image_directory, 'results'])
         self.levelsets = []
         self.isocontours = []
 
     def execute(self):
-        self.parse_stack()
+        self.image = self.parse_stack()
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         self.write_image_as_vtk(self.image, os.path.join(self.output_dir, 'image'))
@@ -96,12 +97,12 @@ class segmenter():
 
     def parse_stack(self):
         directory = self.image_directory
-        for ftype in ['*.nii', '*.tif*']:
-            files = fnmatch.filter(sorted(os.listdir(directory)), ftype)
+        for file_type in ['*.nii', '*.tif*']:
+            files = fnmatch.filter(sorted(os.listdir(directory)), file_type)
             if len(files) > 0:
                 break
 
-        if ftype == "*.tif*":
+        if file_type == "*.tif*":
             counter = [re.search("[0-9]*\.tif", f).group() for f in files]
             for i, c in enumerate(counter):
                 counter[i] = int(c.replace('.tif', ''))
@@ -109,13 +110,13 @@ class segmenter():
             sorter = np.argsort(counter)
             files = files[sorter]
             img = []
-            for fname in files:
-                filename = os.path.join(directory, fname)
+            for f_name in files:
+                filename = os.path.join(directory, f_name)
                 img.append(sitk.ReadImage(filename, sitk.sitkFloat32))
             img = sitk.RescaleIntensity(sitk.JoinSeries(img), 0.0, 1.0)
             print(("\nImported 3D image stack ranging from {:s} to {:s}".format(
                 files[0], files[-1])))
-        elif ftype == "*.nii":
+        elif file_type == "*.nii":
             filename = os.path.join(directory, files[0])
             img = sitk.ReadImage(filename, sitk.sitkFloat32)
             img = sitk.RescaleIntensity(img, 0.0, 1.0)
@@ -124,7 +125,7 @@ class segmenter():
                             " NifTi (.nii) image.")
 
         img.SetSpacing(self.spacing)
-        self.image = img
+        return img
 
     def segment_region_of_interest(self, roi, seedpoint, counter):
         roi = sitk.RescaleIntensity(roi, 0, 1)
@@ -133,14 +134,15 @@ class segmenter():
             equalized = self._apply_adaptive_histogram_equalization(roi)
         else:
             equalized = roi
+        self.write_image_as_vtk(equalized, 'equalized_{:02d}'.format(len(self.levelsets) + 1))
         seedpoint, resampled = self._resample(seedpoint, equalized)
         initial = self._create_initial_levelset(resampled)
         print('... ... Segmenting')
         sc = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
-        sc.SetLambda1(0.9)
+        sc.SetLambda1(1.0)
         sc.SetEpsilon(2.0)
-        sc.SetCurvatureWeight(0.0)
-        sc.SetAreaWeight(0.0)
+        sc.SetCurvatureWeight(10.0)
+        sc.SetAreaWeight(50.0)
         sc.UseImageSpacingOff()
         sc.SetNumberOfIterations(100)
         sc.SetMaximumRMSError(0.02)
@@ -152,28 +154,30 @@ class segmenter():
         cell_mask = self._isolate_cell(ls, seedpoint)
 
         ls = ls * sitk.Cast(cell_mask, sitk.sitkFloat32)
-        if self.levelset_smoothing_scale > 0:
-            ls = sitk.SmoothingRecursiveGaussian(ls, self.levelset_smoothing_scale)
+        if self.levelset_smoothing_radius > 0:
+            ls = sitk.Median(ls, [radius] * 3)
         self.levelsets.append(ls)
 
     def _apply_adaptive_histogram_equalization(self, image):
         print('... ... Adjusting Contrast')
         fraction = self.equalization_fraction
         return sitk.AdaptiveHistogramEqualization(image,
-                                                  radius=[int(s * fraction) for s in image.GetSize()])
+                                                  radius=[int(s * fraction) for s in image.GetSize()],
+                                                  alpha=0.6,
+                                                  beta=0.2)
 
     def _isolate_cell(self, levelset, seedpoint):
         best_label = -1
-        binary = sitk.BinaryThreshold(levelset, 0.4, 1e7)
-        binary = sitk.BinaryMorphologicalOpening(binary, [2, 2, 2])
+        binary = sitk.BinaryThreshold(levelset, 0.7, 1e7)
+        binary = sitk.BinaryMorphologicalOpening(binary, [4, 4, 4])
         binary = sitk.BinaryFillhole(binary)
         components = sitk.ConnectedComponent(binary)
-        labelstats = sitk.LabelShapeStatisticsImageFilter()
-        labelstats.Execute(components)
-        labels = labelstats.GetLabels()
+        label_stats = sitk.LabelShapeStatisticsImageFilter()
+        label_stats.Execute(components)
+        labels = label_stats.GetLabels()
         volumes = []
         for label in labels:
-            volumes.append(labelstats.GetPhysicalSize(label))
+            volumes.append(label_stats.GetPhysicalSize(label))
             if components[seedpoint[0]] == label:
                 best_label = label
         if best_label < 0:
@@ -183,7 +187,8 @@ class segmenter():
         cell_mask = self._mask_cell(levelset, components, labels, best_label)
         return cell_mask
 
-    def _mask_cell(self, levelset, components, labels, best_label):
+    @staticmethod
+    def _mask_cell(levelset, components, labels, best_label):
         mask = sitk.Image(*components.GetSize(), sitk.sitkUInt8)
         mask.CopyInformation(components)
         for label in labels:
@@ -197,7 +202,8 @@ class segmenter():
         mask = sitk.InvertIntensity(mask, 1)
         return mask
 
-    def _create_initial_levelset(self, image):
+    @staticmethod
+    def _create_initial_levelset(image):
         initial = sitk.Image(image.GetSize(), sitk.sitkUInt8) * 0
         initial.CopyInformation(image)
         for i in range(initial.GetSize()[0]):
@@ -213,7 +219,6 @@ class segmenter():
                 initial[0, i, j] = 1
                 initial[initial.GetSize()[0] - 1, i, j] = 1
         return initial
-
 
     def _resample(self, seedpoint, image):
         print('... ... Resampling to isotropic voxel')
@@ -239,6 +244,7 @@ class segmenter():
 
         Parameters
         ----------
+        image: SimpleITK.Image
         name : str, required
             Name of file to save to disk without the file suffix
         """
@@ -249,7 +255,8 @@ class segmenter():
         writer.SetInputData(vtk_img)
         writer.Write()
 
-    def _convert_sitk_to_vtk(self, image):
+    @staticmethod
+    def _convert_sitk_to_vtk(image):
         image = sitk.Cast(image, sitk.sitkFloat32)
         pixel_type = {1: vtk.VTK_UNSIGNED_CHAR,
                       3: vtk.VTK_UNSIGNED_INT,
@@ -267,13 +274,16 @@ class segmenter():
         return vtk_img
 
     def make_surface(self, ls):
-        vtkimage = self._convert_sitk_to_vtk(ls)
+        binary = sitk.BinaryThreshold(ls, 0.1, 1e7)
+        smoothed = sitk.AntiAliasBinary(binary)
 
-        iso = vtk.vtkContourFilter()
-        iso.SetInputData(vtkimage)
+        vtk_image = self._convert_sitk_to_vtk(smoothed)
+
+        iso = vtk.vtkFlyingEdges3D()
+        iso.SetInputData(vtk_image)
         iso.ComputeScalarsOff()
         iso.ComputeNormalsOn()
-        iso.SetValue(0, 0.5)
+        iso.SetValue(0, -1.0)
         iso.Update()
 
         triangles = vtk.vtkGeometryFilter()

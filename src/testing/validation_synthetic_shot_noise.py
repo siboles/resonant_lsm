@@ -16,6 +16,6 @@ for gn in gaussian_noise_levels:
                         spacing=[0.1, 0.1, 0.1],
                         seed_points=all_seeds['reference'][0],
                         bounding_box=[100, 100, 100],
-                        levelset_smoothing_scale=0.1,
+                        levelset_smoothing_scale=0.0,
                         equalization_fraction=0.0)
         seg.execute()
