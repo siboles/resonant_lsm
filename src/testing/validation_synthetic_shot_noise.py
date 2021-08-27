@@ -7,7 +7,7 @@ from resonant_lsm import segmenter, generate_images
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas
 
-REPEATS = 1
+REPEATS = 50
 GAUSSIAN_NOISE = [0.1, 0.2]
 SPECKLE_NOISE = [0.0, 0.1, 0.2]
 
@@ -86,7 +86,7 @@ for gn in GAUSSIAN_NOISE:
                                                                    deformed=0,
                                                                    output=out_directory)
             seg = segmenter(image_directory=root,
-                            spacing=[0.1, 0.1, 0.1],
+                            spacing=[0.2, 0.2, 0.2],
                             seed_points=all_seeds['reference'][0],
                             bounding_box=[100, 100, 100],
                             curvature_weight=10.0,
@@ -107,9 +107,9 @@ for gn in GAUSSIAN_NOISE:
             results['Segmented Surface Area'].append(compare.segmented_surface_area)
             results['Volume Absolute Error'].append(compare.segmented_volume - compare.true_volume)
             results['Surface Area Absolute Error'].append(compare.segmented_surface_area - compare.true_surface_area)
-            results['Volume Percentage Error'].append(compare.segmented_volume / compare.true_volume - 1.0)
+            results['Volume Percentage Error'].append((compare.segmented_volume / compare.true_volume - 1.0) * 100.0)
             results['Surface Area Percentage Error'].append(
-                compare.segmented_surface_area / compare.true_surface_area - 1.0)
+                (compare.segmented_surface_area / compare.true_surface_area - 1.0) * 100.0)
             results['Root Mean Square Offset Error'].append(compare.shape_offset_rms_error)
 
         df = pandas.DataFrame(results)
