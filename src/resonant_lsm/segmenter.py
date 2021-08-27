@@ -143,7 +143,6 @@ class segmenter:
             equalized = self._apply_adaptive_histogram_equalization(roi)
         else:
             equalized = roi
-        self.write_image_as_vtk(equalized, 'equalized_{:02d}'.format(len(self.levelsets) + 1))
         seedpoint, resampled = self._resample(seedpoint, equalized)
         initial = self._create_initial_levelset(resampled)
         print('... ... Segmenting')
