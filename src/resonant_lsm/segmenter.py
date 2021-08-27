@@ -17,6 +17,8 @@ class segmenter:
                  spacing: list[float, float, float] = (1.0, 1.0, 1.0),
                  equalization_fraction: float = 0.25,
                  levelset_smoothing_radius: int = 2,
+                 curvature_weight: float = 10.0,
+                 area_weight: float = 50.0,
                  bounding_box: list[int] = (100, 100, 20),
                  seed_points: list[list[int, int, int]] = ()):
         """
@@ -35,6 +37,11 @@ class segmenter:
             0 to turn off equalization.
         levelset_smoothing_radius : int
             Radius in voxels of median filter used for smoothing levelsets. No smoothing performed if 0.
+        curvature_weight : float
+            Penalizes curvature of the levelset solution in active contour model. Higher results in smoother
+            segmentation, but more likely to overestimate volume or fail to separate close objects.
+        area_weight : float
+            Penalizes area (volume in 3d) of levelset solution. Higher tends to result in a smaller segmented volume.
         bounding_box : [int, int, int]
             Region to consider around each seed point during segmentation.
         seed_points : [[int, int, int],...[int,int, int]]
@@ -57,6 +64,8 @@ class segmenter:
         self.spacing = spacing
         self.equalization_fraction = equalization_fraction
         self.levelset_smoothing_radius = levelset_smoothing_radius
+        self.curvature_weight = curvature_weight
+        self.area_weight = area_weight
         self.bounding_box = bounding_box
         self.seed_points = seed_points
 
@@ -141,8 +150,8 @@ class segmenter:
         sc = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
         sc.SetLambda1(1.0)
         sc.SetEpsilon(2.0)
-        sc.SetCurvatureWeight(10.0)
-        sc.SetAreaWeight(50.0)
+        sc.SetCurvatureWeight(self.curvature_weight)
+        sc.SetAreaWeight(self.area_weight)
         sc.UseImageSpacingOff()
         sc.SetNumberOfIterations(100)
         sc.SetMaximumRMSError(0.02)
