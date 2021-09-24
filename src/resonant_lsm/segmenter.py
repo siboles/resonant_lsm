@@ -14,13 +14,13 @@ class segmenter:
     def __init__(self,
                  config: str = '',
                  image_directory: str = '',
-                 spacing: list[float, float, float] = (1.0, 1.0, 1.0),
+                 spacing: tuple[float, float, float] = (1.0, 1.0, 1.0),
                  equalization_fraction: float = 0.25,
                  levelset_smoothing_radius: int = 2,
                  curvature_weight: float = 10.0,
                  area_weight: float = 50.0,
-                 bounding_box: list[int] = (100, 100, 20),
-                 seed_points: list[list[int, int, int]] = ()):
+                 bounding_box: tuple[int] = (100, 100, 20),
+                 seed_points: tuple[tuple[int, int, int]] = ()):
         """
         Segments cells indicated by user-supplied seed points.
 
@@ -45,7 +45,7 @@ class segmenter:
         bounding_box : [int, int, int]
             Region to consider around each seed point during segmentation.
         seed_points : [[int, int, int],...[int,int, int]]
-            List of points near approximate centroids of cells to segment.
+            Tuple of points near approximate centroids of cells to segment.
 
         Attributes
         ----------
@@ -102,6 +102,8 @@ class segmenter:
             user_settings = yaml.load(user, yaml.SafeLoader)
 
         for k, v in list(user_settings.items()):
+            if isinstance(v, list):
+                v = tuple(v)
             setattr(self, k, v)
 
     def parse_stack(self):
@@ -152,7 +154,7 @@ class segmenter:
         sc.SetCurvatureWeight(self.curvature_weight)
         sc.SetAreaWeight(self.area_weight)
         sc.UseImageSpacingOff()
-        sc.SetNumberOfIterations(100)
+        sc.SetNumberOfIterations(200)
         sc.SetMaximumRMSError(0.02)
         ls = sc.Execute(sitk.Cast(initial, sitk.sitkFloat32),
                         resampled * 255)
@@ -163,7 +165,7 @@ class segmenter:
 
         ls = ls * sitk.Cast(cell_mask, sitk.sitkFloat32)
         if self.levelset_smoothing_radius > 0:
-            ls = sitk.Median(ls, [radius] * 3)
+            ls = sitk.Median(ls, [self.levelset_smoothing_radius] * 3)
         self.levelsets.append(ls)
 
     def _apply_adaptive_histogram_equalization(self, image):
@@ -171,7 +173,7 @@ class segmenter:
         fraction = self.equalization_fraction
         return sitk.AdaptiveHistogramEqualization(image,
                                                   radius=[int(s * fraction) for s in image.GetSize()],
-                                                  alpha=0.6,
+                                                  alpha=0.3,
                                                   beta=0.2)
 
     def _isolate_cell(self, levelset, seedpoint):
@@ -199,13 +201,11 @@ class segmenter:
     def _mask_cell(levelset, components, labels, best_label):
         mask = sitk.Image(*components.GetSize(), sitk.sitkUInt8)
         mask.CopyInformation(components)
-        for label in labels:
-            if label != best_label:
-                mask = mask + sitk.Cast(components == label,
-                                        sitk.sitkUInt8)
+        mask = sitk.BinaryThreshold(levelset, 0.1, 1e7)
+        mask = sitk.BinaryDilate(mask, [1, 1, 1])
+        mask = sitk.VotingBinaryIterativeHoleFilling(mask)
         mask2 = sitk.BinaryDilate(components == best_label, [4, 4, 4])
         mask2 = sitk.InvertIntensity(mask2, 1)
-        mask = sitk.BinaryThreshold(levelset, 0.1, 1e7)
         mask = mask * mask2
         mask = sitk.InvertIntensity(mask, 1)
         return mask
@@ -283,6 +283,7 @@ class segmenter:
 
     def make_surface(self, ls):
         binary = sitk.BinaryThreshold(ls, 0.1, 1e7)
+        binary = sitk.VotingBinaryIterativeHoleFilling(binary)
         smoothed = sitk.AntiAliasBinary(binary)
 
         vtk_image = self._convert_sitk_to_vtk(smoothed)
@@ -338,7 +339,7 @@ class segmenter:
         self.isocontours.append(isocontour)
 
     def write_surface(self, iso, counter):
-        writer = vtk.vtkSTLWriter()
+        writer = vtk.vtkXMLPolyDataWriter()
         writer.SetFileName(os.path.join(self.output_dir, 'cell_{:03d}.stl'.format(counter)))
         writer.SetInputData(iso)
         writer.Write()

@@ -41,7 +41,7 @@ def main(base_directory):
         axs[i].set_title(key)
         axs[i].yaxis.set_major_formatter(FormatStrFormatter('%0.2f'))
     plt.xticks(rotation=30)
-    plt.show()
+    plt.savefig(base_directory + '.svg')
 
 if __name__ == '__main__':
     main(sys.argv[-1])
