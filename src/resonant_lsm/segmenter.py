@@ -146,6 +146,7 @@ class segmenter:
         else:
             equalized = roi
         seedpoint, resampled = self._resample(seedpoint, equalized)
+        adjusted = self._identify_nuclei(resampled, counter + 1)
         initial = self._create_initial_levelset(resampled)
         print('... ... Segmenting')
         sc = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
@@ -157,7 +158,7 @@ class segmenter:
         sc.SetNumberOfIterations(200)
         sc.SetMaximumRMSError(0.02)
         ls = sc.Execute(sitk.Cast(initial, sitk.sitkFloat32),
-                        resampled * 255)
+                        adjusted * 255)
 
         print('... ... ... Final Metric Value: {}'.format(sc.GetRMSChange()))
         print('... ... ... Number of iterations: {}'.format(sc.GetNumberOfIterations()))
@@ -196,6 +197,27 @@ class segmenter:
 
         cell_mask = self._mask_cell(levelset, components, labels, best_label)
         return cell_mask
+
+    def _identify_nuclei(self, image, counter) -> None:
+        smoothed = sitk.SmoothingRecursiveGaussian(image, 0.5)
+        otsu = sitk.OtsuMultipleThresholds(smoothed, numberOfThresholds=3, valleyEmphasis=True)
+        otsu_threshold = sitk.OtsuThresholdImageFilter()
+        otsu_threshold.SetMaskValue(2)
+        nuclei = otsu_threshold.Execute(smoothed, otsu) * otsu==2
+        nuclei = sitk.BinaryMorphologicalOpening(nuclei, [3, 3, 3])
+        if np.sum(sitk.GetArrayFromImage(nuclei).ravel()) == 0:
+            return image
+        labels = nuclei + 2 * sitk.Cast(otsu == 3, sitk.sitkUInt8)
+        stats_filter = sitk.LabelStatisticsImageFilter()
+        stats_filter.Execute(smoothed, labels)
+        mean_nuclei = stats_filter.GetMean(1)
+        mean_bright_cell = stats_filter.GetMean(2)
+        adjusted_image1 = image * sitk.Cast(nuclei, sitk.sitkFloat32) * mean_bright_cell / mean_nuclei
+        adjusted_image2 = image * sitk.Cast(nuclei < 1, sitk.sitkFloat32)
+
+        adjusted_image1 = sitk.Cast(adjusted_image1, sitk.sitkFloat32)
+        adjusted_image2 = sitk.Cast(adjusted_image2, sitk.sitkFloat32)
+        return adjusted_image1 + adjusted_image2
 
     @staticmethod
     def _mask_cell(levelset, components, labels, best_label):
@@ -340,7 +362,7 @@ class segmenter:
 
     def write_surface(self, iso, counter):
         writer = vtk.vtkXMLPolyDataWriter()
-        writer.SetFileName(os.path.join(self.output_dir, 'cell_{:03d}.stl'.format(counter)))
+        writer.SetFileName(os.path.join(self.output_dir, 'cell_{:03d}.vtp'.format(counter)))
         writer.SetInputData(iso)
         writer.Write()
 
