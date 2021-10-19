@@ -7,7 +7,7 @@ from resonant_lsm import segmenter, generate_images
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas
 
-REPEATS = 50
+REPEATS = 5
 GAUSSIAN_NOISE = [0.1, 0.2]
 SPECKLE_NOISE = [0.0, 0.1, 0.2]
 
@@ -60,6 +60,21 @@ now = datetime.datetime.now()
 root_directory = now.strftime('tests_%m_%d_%H_%M')
 os.mkdir(root_directory)
 
+
+def update_results(results: dict, compare: DataComparison) -> dict:
+    results['True Volume'].append(compare.true_volume)
+    results['True Surface Area'].append(compare.true_surface_area)
+    results['Segmented Volume'].append(compare.segmented_volume)
+    results['Segmented Surface Area'].append(compare.segmented_surface_area)
+    results['Volume Absolute Error'].append(compare.segmented_volume - compare.true_volume)
+    results['Surface Area Absolute Error'].append(compare.segmented_surface_area - compare.true_surface_area)
+    results['Volume Percentage Error'].append((compare.segmented_volume / compare.true_volume - 1.0) * 100.0)
+    results['Surface Area Percentage Error'].append(
+        (compare.segmented_surface_area / compare.true_surface_area - 1.0) * 100.0)
+    results['Root Mean Square Offset Error'].append(compare.shape_offset_rms_error)
+    return results
+
+
 for gn in GAUSSIAN_NOISE:
     for sn in SPECKLE_NOISE:
         results = {'True Volume': [],
@@ -83,9 +98,9 @@ for gn in GAUSSIAN_NOISE:
                                                                    speckle_noise=sn,
                                                                    spacing=0.2,
                                                                    number=1,
-                                                                   deformed=0,
+                                                                   deformed=10,
                                                                    output=out_directory)
-            seg = segmenter(image_directory=root,
+            seg = segmenter(image_directory=os.path.join(root, "reference"),
                             spacing=[0.2, 0.2, 0.2],
                             seed_points=all_seeds['reference'][0],
                             bounding_box=[100, 100, 100],
@@ -94,23 +109,30 @@ for gn in GAUSSIAN_NOISE:
                             levelset_smoothing_radius=0.0,
                             equalization_fraction=0.0)
             seg.execute()
-
-            compare = DataComparison(os.path.join(root, 'ref.vtk'),
+            compare = DataComparison(os.path.join(seg.image_directory, 'ref.vtk'),
                                      seg.isocontours[-1])
 
-            compare.write_polydata(os.path.join('_'.join([out_directory, 'results']),
+            compare.write_polydata(os.path.join('_'.join([seg.image_directory, 'results']),
                                                 'comparison'))
+            results = update_results(results, compare)
 
-            results['True Volume'].append(compare.true_volume)
-            results['True Surface Area'].append(compare.true_surface_area)
-            results['Segmented Volume'].append(compare.segmented_volume)
-            results['Segmented Surface Area'].append(compare.segmented_surface_area)
-            results['Volume Absolute Error'].append(compare.segmented_volume - compare.true_volume)
-            results['Surface Area Absolute Error'].append(compare.segmented_surface_area - compare.true_surface_area)
-            results['Volume Percentage Error'].append((compare.segmented_volume / compare.true_volume - 1.0) * 100.0)
-            results['Surface Area Percentage Error'].append(
-                (compare.segmented_surface_area / compare.true_surface_area - 1.0) * 100.0)
-            results['Root Mean Square Offset Error'].append(compare.shape_offset_rms_error)
+            deformed_segmentations = []
+            for deformation_iter in range(10):
+                directory = os.path.join(root, "def_{:03d}".format(deformation_iter + 1))
+                deformed_segmentations.append(segmenter(image_directory=directory,
+                                                        spacing=[0.2, 0.2, 0.2],
+                                                        seed_points=all_seeds["deformed"][deformation_iter],
+                                                        bounding_box=[100, 100, 100],
+                                                        curvature_weight=10.0,
+                                                        area_weight=50.0,
+                                                        levelset_smoothing_radius=0.0,
+                                                        equalization_fraction=0.0))
+                deformed_segmentations[-1].execute()
+                compare = DataComparison(os.path.join(directory, "def.vtk"),
+                                         deformed_segmentations[-1].isocontours[-1])
+                compare.write_polydata(os.path.join('_'.join([directory, "results"]), "comparison"))
+
+                results = update_results(results, compare)
 
         df = pandas.DataFrame(results)
         df.to_excel(os.path.join(root_directory, '.'.join([suffix, 'xlsx'])))

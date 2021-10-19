@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 from openpyxl import Workbook
 from collections import OrderedDict
+from typing import List
 
 
 def read_surfaces(ref_dir, def_dir):
@@ -14,27 +15,34 @@ def read_surfaces(ref_dir, def_dir):
     for fname in sorted(os.listdir(ref_dir)):
         if '.stl' in fname.lower():
             reader = vtk.vtkSTLReader()
-            reader.SetFileName(
-                str(os.path.normpath(ref_dir + os.sep + fname)))
-            reader.Update()
-            triangles = vtk.vtkTriangleFilter()
-            triangles.SetInputConnection(reader.GetOutputPort())
-            triangles.Update()
-            rsurfs.append(triangles.GetOutput())
-
+        elif ".vtk" in fname.lower() or ".vtp" in fname.lower():
+            reader = vtk.vtkPolyDataReader()
+        else:
+            continue
+        reader.SetFileName(
+            str(os.path.normpath(ref_dir + os.sep + fname)))
+        reader.Update()
+        triangles = vtk.vtkTriangleFilter()
+        triangles.SetInputConnection(reader.GetOutputPort())
+        triangles.Update()
+        rsurfs.append(triangles.GetOutput())
     dsurfs = []
     cell_ids = []
     for fname in sorted(os.listdir(def_dir)):
         if '.stl' in fname.lower():
             reader = vtk.vtkSTLReader()
-            reader.SetFileName(
-                str(os.path.normpath(def_dir + os.sep + fname)))
-            reader.Update()
-            triangles = vtk.vtkTriangleFilter()
-            triangles.SetInputConnection(reader.GetOutputPort())
-            triangles.Update()
-            dsurfs.append(triangles.GetOutput())
-            cell_ids.append(os.path.basename(fname).replace('.stl', ''))
+        elif ".vtk" in fname.lower() or ".vtp" in fname.lower():
+            reader = vtk.vtkPolyDataReader()
+        else:
+            continue
+        reader.SetFileName(
+            str(os.path.normpath(def_dir + os.sep + fname)))
+        reader.Update()
+        triangles = vtk.vtkTriangleFilter()
+        triangles.SetInputConnection(reader.GetOutputPort())
+        triangles.Update()
+        dsurfs.append(triangles.GetOutput())
+        cell_ids.append(os.path.basename(fname).replace('.stl', ''))
     return rsurfs, dsurfs, cell_ids
 
 
@@ -45,7 +53,7 @@ def get_cell_orientation(surf):
     return pca.components_[0]
 
 
-def get_strain(rsurfs: List[vtk.PolyData], dsurfs: List[vtk.PolyData], cell_ids: List[int]) -> dict:
+def get_strain(rsurfs: List, dsurfs: List, cell_ids: List[int]) -> dict:
     rvolumes = []
     dvolumes = []
     rcentroids = []
@@ -100,10 +108,10 @@ def get_strain(rsurfs: List[vtk.PolyData], dsurfs: List[vtk.PolyData], cell_ids:
                 deformation_gradient[j, k] = iterative_closest_point.GetMatrix().GetElement(j, k)
         green_lagrange_strain = 0.5 * (np.dot(deformation_gradient.T, deformation_gradient) - np.eye(3))
         principal_strains, principal_strain_directions = np.linalg.eigh(green_lagrange_strain)
-        principal_strain_1.append(principal_strains[-1])
+        principal_strain_1.append(principal_strains[2])
         principal_strain_3.append(principal_strains[0])
-        principal_strain_1_direction.append([-1])
-        principal_strain_3_direction.append([0])
+        principal_strain_1_direction.append(principal_strain_directions[:, 2])
+        principal_strain_3_direction.append(principal_strain_directions[:, 0])
         strains.append(green_lagrange_strain)
     results = OrderedDict({"Volumetric Strains": vstrains,
                            "Strains": strains,
@@ -190,7 +198,7 @@ def write_results(filename: str, results: dict) -> None:
                           results[k]['Reference Surface Areas'][j] / results[k]['Reference Volumes'][j],
                           results[k]['Deformed Surface Areas'][j] / results[k]['Deformed Volumes'][j],
                           results[k]['Reference Cell Directions'][j][0],
-                          results[k]['Reference Cell Directions'][j][1],cellIDs
+                          results[k]['Reference Cell Directions'][j][1],
                           results[k]['Reference Cell Directions'][j][2],
                           results[k]['Reference Cell Centroids'][j][0],
                           results[k]['Reference Cell Centroids'][j][1],
@@ -203,12 +211,12 @@ def write_results(filename: str, results: dict) -> None:
 
 
 def main(directory_file):
-    directories = parseDirectoryFile(directory_file)
+    directories = parse_directory_file(directory_file)
     results = OrderedDict()
 
     for deformed_directory in directories['deformed']:
         rsurfs, dsurfs, cell_ids = read_surfaces(directories['reference'], deformed_directory)
-        results[d] = getStrain(rsurfs, dsurfs, cell_ids)
+        results[deformed_directory] = get_strain(rsurfs, dsurfs, cell_ids)
 
     write_results(directories['reference'], results)
 

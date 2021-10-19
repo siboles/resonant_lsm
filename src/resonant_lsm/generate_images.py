@@ -102,6 +102,7 @@ def _deform_poly_data(p, divisions, scale):
     z_edge = bounds[5] - bounds[4]
     min_edge = np.min([x_edge, y_edge, z_edge])
     ratios = np.array([x_edge, y_edge, z_edge]) / min_edge
+
     knots = np.ceil(divisions * ratios).astype(int)
     # step_size = np.array([spacing] * 3) * 3
     # div = [np.ceil(np.abs(bounds[2 * i + 1] - bounds[2 * i]) / step_size[i]).astype(int) for i in range(3)]
@@ -145,6 +146,55 @@ def _deform_poly_data(p, divisions, scale):
 
     polydata = poly_transform.GetOutput()
     return polydata
+
+def _homogeneous_deform(surface):
+    #principal stretches
+    lam1 = np.random.uniform(0.8, 1.2)
+    lam2 = np.random.uniform(0.8, 1.2)
+    lam3 = np.random.uniform(0.8, 1.2)
+
+    #Euler angles for rotation from Cartesian basis
+    #the aim is to randomly define an eigenbasis for
+    #the principal stretches that transforms to identity {e_i}
+    #by this rotation generating a U containing dilatation
+    #and shear with no worry of not being positive definite
+    #Euler angle definition (extrinsic):
+    #   alpha - rotation about reference z
+    #   beta - rotation about reference x
+    #   gamma - rotation about z
+    alpha = np.random.uniform(0, np.pi / 4.0)
+    beta = np.random.uniform(0, np.pi / 4.0)
+    gamma = np.random.uniform(0, np.pi / 4.0)
+
+    Q = np.zeros((3, 3), np.float64)
+    Q[0, 0] = np.cos(alpha) * np.cos(gamma) - np.cos(beta) * np.sin(alpha) * np.sin(gamma)
+    Q[0, 1] = -np.cos(alpha) * np.sin(gamma) - np.cos(beta) * np.cos(gamma) * np.sin(alpha)
+    Q[0, 2] = np.sin(alpha) * np.sin(beta)
+    Q[1, 0] = np.cos(gamma) * np.sin(alpha) + np.cos(alpha) * np.cos(beta) * np.sin(gamma)
+    Q[1, 1] = np.cos(alpha) * np.cos(beta) * np.cos(gamma) - np.sin(alpha) * np.sin(gamma)
+    Q[1, 2] = -np.cos(alpha) * np.sin(beta)
+    Q[2, 0] = np.sin(beta) * np.sin(gamma)
+    Q[2, 1] = np.cos(gamma) * np.sin(beta)
+    Q[2, 2] = np.cos(beta)
+
+    #$U = \sum_1^3 \lambda_i \mathbf{r}_i \outer \mathbf{r}_i$
+    U = np.zeros((3, 3), np.float64)
+    l = [lam1, lam2, lam3]
+    for j in range(3):
+        r = np.dot(Q, np.eye(3)[:, j])
+        U += np.outer(l[j] * r, r)
+
+    transform = vtk.vtkTransform()
+    tmp = np.eye(4)
+    tmp[0:3, 0:3] = U
+    transform.SetMatrix(tmp.ravel())
+    transform.Update()
+
+    spatial = vtk.vtkTransformPolyDataFilter()
+    spatial.SetTransform(transform)
+    spatial.SetInputData(surface)
+    spatial.Update()
+    return spatial.GetOutput()
 
 
 def _poly2img(p, spacing, shot_noise, background_noise):
@@ -309,16 +359,22 @@ def generate_test_images(a=2.5, b=1.2, c=0.8, n1=0.9, n2=0.9, spacing=0.1, outpu
     ref_img, seeds = _poly2img(ref_polydata, spacing, speckle_noise, background_noise)
 
     all_seeds = {"reference": [seeds], "deformed": []}
-    sitk.WriteImage(ref_img, os.path.join(root, "ref.nii"))
-    write_image_as_vtk(ref_img, os.path.join(root, 'ref'))
-    write_polydata(ref_polydata, os.path.join(root, 'ref'))
+    reference_directory = os.path.join(root, "reference")
+    if not os.path.exists(reference_directory):
+        os.mkdir(reference_directory)
+    sitk.WriteImage(ref_img, os.path.join(reference_directory, "ref.nii"))
+    write_image_as_vtk(ref_img, os.path.join(reference_directory, 'ref'))
+    write_polydata(ref_polydata, os.path.join(reference_directory, 'ref'))
     for i in range(deformed):
-        def_polydata = _deform_poly_data(ref_polydata, divisions, scale)
+        def_polydata = _homogeneous_deform(ref_polydata)
         def_img, seeds = _poly2img(def_polydata, spacing, speckle_noise, background_noise)
         all_seeds["deformed"].append(seeds)
-        sitk.WriteImage(def_img, os.path.join(root, "def_{:03d}.nii".format(i + 1)))
-        write_image_as_vtk(def_img, os.path.join(root, "def{:03d}".format(i + 1)))
-        write_polydata(def_polydata, os.path.join(root, 'def_{:03d}'.format(i + 1)))
+        deformed_directory = os.path.join(root, "def_{:03d}".format(i + 1))
+        if not os.path.exists(deformed_directory):
+            os.mkdir(deformed_directory)
+        sitk.WriteImage(def_img, os.path.join(deformed_directory, "def.nii"))
+        write_image_as_vtk(def_img, os.path.join(deformed_directory, "def"))
+        write_polydata(def_polydata, os.path.join(deformed_directory, 'def'))
     return root, all_seeds
 
 
