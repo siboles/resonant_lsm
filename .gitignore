@@ -8,4 +8,5 @@ src/build/*
 .idea/*
 *neomake*.py
 __pycache__
+tests_*_*
 

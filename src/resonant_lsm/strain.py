@@ -15,8 +15,10 @@ def read_surfaces(ref_dir, def_dir):
     for fname in sorted(os.listdir(ref_dir)):
         if '.stl' in fname.lower():
             reader = vtk.vtkSTLReader()
-        elif ".vtk" in fname.lower() or ".vtp" in fname.lower():
+        elif ".vtk" in fname.lower():
             reader = vtk.vtkPolyDataReader()
+        elif ".vtp" in fname.lower():
+            reader = vtk.vtkXMLPolyDataReader()
         else:
             continue
         reader.SetFileName(
@@ -31,8 +33,10 @@ def read_surfaces(ref_dir, def_dir):
     for fname in sorted(os.listdir(def_dir)):
         if '.stl' in fname.lower():
             reader = vtk.vtkSTLReader()
-        elif ".vtk" in fname.lower() or ".vtp" in fname.lower():
+        elif ".vtk" in fname.lower():
             reader = vtk.vtkPolyDataReader()
+        elif ".vtp" in fname.lower():
+            reader = vtk.vtkXMLPolyDataReader()
         else:
             continue
         reader.SetFileName(
@@ -59,6 +63,7 @@ def get_strain(rsurfs: List, dsurfs: List, cell_ids: List[int]) -> dict:
     rcentroids = []
     rsurface_areas = []
     dsurface_areas = []
+    surface_area_strains = []
     cell_dirs = []
     vstrains = []
     strains = []
@@ -87,6 +92,8 @@ def get_strain(rsurfs: List, dsurfs: List, cell_ids: List[int]) -> dict:
         rcentroids.append(center_of_mass.GetCenter())
         # volumetric strains
         vstrains.append(dvol / rvol - 1.0)
+        # surface area strains
+        surface_area_strains.append(dsurfarea / rsurfarea - 1.0)
 
         iterative_closest_point = vtk.vtkIterativeClosestPointTransform()
         rcopy = vtk.vtkPolyData()
@@ -114,6 +121,7 @@ def get_strain(rsurfs: List, dsurfs: List, cell_ids: List[int]) -> dict:
         principal_strain_3_direction.append(principal_strain_directions[:, 0])
         strains.append(green_lagrange_strain)
     results = OrderedDict({"Volumetric Strains": vstrains,
+                           "Normalized Surface Area Change": surface_area_strains,
                            "Strains": strains,
                            "1st Principal Strains": principal_strain_1,
                            "3rd Principal Strains": principal_strain_3,
@@ -153,6 +161,7 @@ def write_results(filename: str, results: dict) -> None:
             ws.append(wb.create_sheet(title=os.path.basename(k)))
         ws[-1].append(['Cell ID',
                        'Volumetric Strain',
+                       'Normalized Surface Area Change',
                        'Maximum Tensile Strain',
                        'Maximum Compressive Strain',
                        'Max Tensile Strain Component 1',
@@ -183,6 +192,7 @@ def write_results(filename: str, results: dict) -> None:
                                         results[k]['3rd Principal Strain Directions'][j]))
             ws[i].append([results[k]['Cell IDs'][j],
                           v,
+                          results[k]['Normalized Surface Area Change'][j],
                           results[k]['1st Principal Strains'][j],
                           results[k]['3rd Principal Strains'][j],
                           results[k]['1st Principal Strain Directions'][j][0],

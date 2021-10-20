@@ -37,11 +37,11 @@ def main(base_directory):
         data = []
         for dataframe in dataframes:
             data.append(dataframe[key].values)
-        axs[i].boxplot(data, notch=True, bootstrap=1000, labels=titles)
+        axs[i].boxplot(data, notch=True, bootstrap=1000, labels=titles, showfliers=False)
         axs[i].set_title(key)
         axs[i].yaxis.set_major_formatter(FormatStrFormatter('%0.2f'))
     plt.xticks(rotation=30)
-    plt.savefig(base_directory + '.svg')
+    plt.savefig(base_directory + '_segmentation_error.svg')
 
 if __name__ == '__main__':
     main(sys.argv[-1])
