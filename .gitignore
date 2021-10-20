@@ -9,4 +9,8 @@ src/build/*
 *neomake*.py
 __pycache__
 tests_*_*
+*.vtp
+*.stl
+*.tif
+*.tiff
 
