@@ -37,7 +37,8 @@ def main(base_directory):
         data = []
         for dataframe in dataframes:
             data.append(dataframe[key].values)
-        axs[i].boxplot(data, notch=True, bootstrap=1000, labels=titles, showfliers=False)
+        axs[i].boxplot(data, notch=True, bootstrap=1000, labels=titles, showfliers=False,
+                       medianprops=dict(color='k'))
         axs[i].set_title(key + " Error")
         axs[i].yaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
     plt.xticks(rotation=30)
