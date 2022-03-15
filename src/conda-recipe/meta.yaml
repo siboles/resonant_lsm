@@ -1,18 +1,19 @@
+{% set version = "0.0" %}
 package:
   name: resonant_lsm
-  version: 0.0
+  version: {{ version }}
 
 source:
   git_url: https://github.com/siboles/resonant_lsm.git
-  git_rev: 0.0
+  git_rev: v{{ version }}
 
+build:
+  script {{ PYTHON }} -m pip install . -vv
 requirements:
-  build:
+  host:
     - python
-    - vtk >=9.0
-    - simpleitk >=2.0
-    - pyyaml >=5.4
-    - numpy >=1.21
+    - pip
+    - setuptools
   run:
     - python
     - vtk >=9.0
