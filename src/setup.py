@@ -1,11 +1,7 @@
-try:
-    from setuptools.core import setup
-except ImportError:
-    from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(
     name='resonant_lsm',
-    version='0.0',
     author='Scott Sibole',
-    packages=['resonant_lsm',
-             ])
+    packages=find_packages()
+    )
