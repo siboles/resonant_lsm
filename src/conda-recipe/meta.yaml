@@ -20,6 +20,9 @@ requirements:
     - simpleitk >=2.0
     - pyyaml >=5.4
     - numpy >=1.21
+    - pandas
+    - seaborn
+    - openpyxl
 
 test:
   imports:
