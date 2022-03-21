@@ -1,12 +1,12 @@
 from resonant_lsm import utils
 
 FILES = (
-    "May16/cell_patella/cell_ref_patella_results/results.xlsx",
-    "June14/cell_patella/cell_ref_patella_results/results.xlsx",
-    "June21/cell_patella/cell_ref_patella_results/results.xlsx",
-    "June28/cell_patella/cell_ref_patella_results/results.xlsx",
-    "July04/cell_patella/cell_ref_patella_results/results.xlsx",
-    "July16/cell_patella/cell_ref_patella_results/results.xlsx")
+    "../../dat/May16/cell_patella/cell_ref_patella_results/results.xlsx",
+    "../../dat/June14/cell_patella/cell_ref_patella_results/results.xlsx",
+    "../../dat/June21/cell_patella/cell_ref_patella_results/results.xlsx",
+    "../../dat/June28/cell_patella/cell_ref_patella_results/results.xlsx",
+    "../../dat/July04/cell_patella/cell_ref_patella_results/results.xlsx",
+    "../../dat/July16/cell_patella/cell_ref_patella_results/results.xlsx")
 
 TIME_MAP = {
     "cell_2min_patella_results": 2,
