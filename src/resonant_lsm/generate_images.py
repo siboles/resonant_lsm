@@ -95,7 +95,7 @@ def _pack_objects(objects, spacing):
 
 
 def _deform_poly_data(p, divisions, scale):
-    # create thin-plate spline control po0.05ints
+    # create thin-plate spline control points
     bounds = p.GetBounds()
     x_edge = bounds[1] - bounds[0]
     y_edge = bounds[3] - bounds[2]
@@ -162,31 +162,43 @@ def _homogeneous_deform(surface):
     #   alpha - rotation about reference z
     #   beta - rotation about reference x
     #   gamma - rotation about z
-    alpha = np.random.uniform(0, np.pi / 4.0)
-    beta = np.random.uniform(0, np.pi / 4.0)
-    gamma = np.random.uniform(0, np.pi / 4.0)
+    alpha_r = np.random.uniform(0, np.pi / 4.0)
+    beta_r = np.random.uniform(0, np.pi / 4.0)
+    gamma_r = np.random.uniform(0, np.pi / 4.0)
 
-    Q = np.zeros((3, 3), np.float64)
-    Q[0, 0] = np.cos(alpha) * np.cos(gamma) - np.cos(beta) * np.sin(alpha) * np.sin(gamma)
-    Q[0, 1] = -np.cos(alpha) * np.sin(gamma) - np.cos(beta) * np.cos(gamma) * np.sin(alpha)
-    Q[0, 2] = np.sin(alpha) * np.sin(beta)
-    Q[1, 0] = np.cos(gamma) * np.sin(alpha) + np.cos(alpha) * np.cos(beta) * np.sin(gamma)
-    Q[1, 1] = np.cos(alpha) * np.cos(beta) * np.cos(gamma) - np.sin(alpha) * np.sin(gamma)
-    Q[1, 2] = -np.cos(alpha) * np.sin(beta)
-    Q[2, 0] = np.sin(beta) * np.sin(gamma)
-    Q[2, 1] = np.cos(gamma) * np.sin(beta)
-    Q[2, 2] = np.cos(beta)
+    R = np.zeros((3, 3), np.float64)
+    R[0, 0] = np.cos(alpha_r) * np.cos(gamma_r) - np.cos(beta_r) * np.sin(alpha_r) * np.sin(gamma_r)
+    R[0, 1] = -np.cos(alpha_r) * np.sin(gamma_r) - np.cos(beta_r) * np.cos(gamma_r) * np.sin(alpha_r)
+    R[0, 2] = np.sin(alpha_r) * np.sin(beta_r)
+    R[1, 0] = np.cos(gamma_r) * np.sin(alpha_r) + np.cos(alpha_r) * np.cos(beta_r) * np.sin(gamma_r)
+    R[1, 1] = np.cos(alpha_r) * np.cos(beta_r) * np.cos(gamma_r) - np.sin(alpha_r) * np.sin(gamma_r)
+    R[1, 2] = -np.cos(alpha_r) * np.sin(beta_r)
+    R[2, 0] = np.sin(beta_r) * np.sin(gamma_r)
+    R[2, 1] = np.cos(gamma_r) * np.sin(beta_r)
+    R[2, 2] = np.cos(beta_r)
 
-    #$U = \sum_1^3 \lambda_i \mathbf{r}_i \outer \mathbf{r}_i$
-    U = np.zeros((3, 3), np.float64)
-    l = [lam1, lam2, lam3]
-    for j in range(3):
-        r = np.dot(Q, np.eye(3)[:, j])
-        U += np.outer(l[j] * r, r)
+    alpha_m = np.random.uniform(0, np.pi / 4.0)
+    beta_m = np.random.uniform(0, np.pi / 4.0)
+    gamma_m = np.random.uniform(0, np.pi / 4.0)
+    M = np.zeros((3, 3), np.float64)
+    M[0, 0] = np.cos(alpha_m) * np.cos(gamma_m) - np.cos(beta_m) * np.sin(alpha_m) * np.sin(gamma_m)
+    M[0, 1] = -np.cos(alpha_m) * np.sin(gamma_m) - np.cos(beta_m) * np.cos(gamma_m) * np.sin(alpha_m)
+    M[0, 2] = np.sin(alpha_m) * np.sin(beta_m)
+    M[1, 0] = np.cos(gamma_m) * np.sin(alpha_m) + np.cos(alpha_m) * np.cos(beta_m) * np.sin(gamma_m)
+    M[1, 1] = np.cos(alpha_m) * np.cos(beta_m) * np.cos(gamma_m) - np.sin(alpha_m) * np.sin(gamma_m)
+    M[1, 2] = -np.cos(alpha_m) * np.sin(beta_m)
+    M[2, 0] = np.sin(beta_m) * np.sin(gamma_m)
+    M[2, 1] = np.cos(gamma_m) * np.sin(beta_m)
+    M[2, 2] = np.cos(beta_m)
+    
+
+    U = np.diagonal([lam1, lam2, lam3])
+
+    F = np.matmul(R, np.matmul(M, np.matmul(U, M.T)))
 
     transform = vtk.vtkTransform()
     tmp = np.eye(4)
-    tmp[0:3, 0:3] = U
+    tmp[0:3, 0:3] = F
     transform.SetMatrix(tmp.ravel())
     transform.Update()
 

@@ -2,10 +2,10 @@ import datetime
 import os
 
 import numpy as np
+import pandas
 import vtk
 from resonant_lsm import segmenter, generate_images
 from vtk.util.numpy_support import vtk_to_numpy
-import pandas
 
 REPEATS = 5
 GAUSSIAN_NOISE = [0.1, 0.2]
@@ -100,14 +100,14 @@ for gn in GAUSSIAN_NOISE:
                                                                    number=1,
                                                                    deformed=10,
                                                                    output=out_directory)
-            seg = segmenter(image_directory=os.path.join(root, "reference"),
-                            spacing=[0.2, 0.2, 0.2],
-                            seed_points=all_seeds['reference'][0],
-                            bounding_box=[100, 100, 100],
-                            curvature_weight=10.0,
-                            area_weight=50.0,
-                            levelset_smoothing_radius=0.0,
-                            equalization_fraction=0.0)
+            seg = segmenter.segmenter(image_directory=os.path.join(root, "reference"),
+                                      spacing=[0.2, 0.2, 0.2],
+                                      seed_points=all_seeds['reference'][0],
+                                      bounding_box=[100, 100, 100],
+                                      curvature_weight=10.0,
+                                      area_weight=50.0,
+                                      levelset_smoothing_radius=0.0,
+                                      equalization_fraction=0.0)
             seg.execute()
             compare = DataComparison(os.path.join(seg.image_directory, 'ref.vtk'),
                                      seg.isocontours[-1])
@@ -119,14 +119,15 @@ for gn in GAUSSIAN_NOISE:
             deformed_segmentations = []
             for deformation_iter in range(10):
                 directory = os.path.join(root, "def_{:03d}".format(deformation_iter + 1))
-                deformed_segmentations.append(segmenter(image_directory=directory,
-                                                        spacing=[0.2, 0.2, 0.2],
-                                                        seed_points=all_seeds["deformed"][deformation_iter],
-                                                        bounding_box=[100, 100, 100],
-                                                        curvature_weight=10.0,
-                                                        area_weight=50.0,
-                                                        levelset_smoothing_radius=0.0,
-                                                        equalization_fraction=0.0))
+                seg = segmenter.segmenter(image_directory=directory,
+                                          spacing=[0.2, 0.2, 0.2],
+                                          seed_points=all_seeds["deformed"][deformation_iter],
+                                          bounding_box=[100, 100, 100],
+                                          curvature_weight=10.0,
+                                          area_weight=50.0,
+                                          levelset_smoothing_radius=0.0,
+                                          equalization_fraction=0.0)
+                deformed_segmentations.append(seg)
                 deformed_segmentations[-1].execute()
                 compare = DataComparison(os.path.join(directory, "def.vtk"),
                                          deformed_segmentations[-1].isocontours[-1])
