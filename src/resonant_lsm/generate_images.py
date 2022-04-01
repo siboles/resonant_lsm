@@ -162,20 +162,20 @@ def _homogeneous_deform(surface):
     #   alpha - rotation about reference z
     #   beta - rotation about reference x
     #   gamma - rotation about z
-    alpha_r = np.random.uniform(0, np.pi / 4.0)
-    beta_r = np.random.uniform(0, np.pi / 4.0)
-    gamma_r = np.random.uniform(0, np.pi / 4.0)
+    #alpha_r = np.random.uniform(0, np.pi / 4.0)
+    #beta_r = np.random.uniform(0, np.pi / 4.0)
+    #gamma_r = np.random.uniform(0, np.pi / 4.0)
 
-    R = np.zeros((3, 3), np.float64)
-    R[0, 0] = np.cos(alpha_r) * np.cos(gamma_r) - np.cos(beta_r) * np.sin(alpha_r) * np.sin(gamma_r)
-    R[0, 1] = -np.cos(alpha_r) * np.sin(gamma_r) - np.cos(beta_r) * np.cos(gamma_r) * np.sin(alpha_r)
-    R[0, 2] = np.sin(alpha_r) * np.sin(beta_r)
-    R[1, 0] = np.cos(gamma_r) * np.sin(alpha_r) + np.cos(alpha_r) * np.cos(beta_r) * np.sin(gamma_r)
-    R[1, 1] = np.cos(alpha_r) * np.cos(beta_r) * np.cos(gamma_r) - np.sin(alpha_r) * np.sin(gamma_r)
-    R[1, 2] = -np.cos(alpha_r) * np.sin(beta_r)
-    R[2, 0] = np.sin(beta_r) * np.sin(gamma_r)
-    R[2, 1] = np.cos(gamma_r) * np.sin(beta_r)
-    R[2, 2] = np.cos(beta_r)
+    #R = np.zeros((3, 3), np.float64)
+    #R[0, 0] = np.cos(alpha_r) * np.cos(gamma_r) - np.cos(beta_r) * np.sin(alpha_r) * np.sin(gamma_r)
+    #R[0, 1] = -np.cos(alpha_r) * np.sin(gamma_r) - np.cos(beta_r) * np.cos(gamma_r) * np.sin(alpha_r)
+    #R[0, 2] = np.sin(alpha_r) * np.sin(beta_r)
+    #R[1, 0] = np.cos(gamma_r) * np.sin(alpha_r) + np.cos(alpha_r) * np.cos(beta_r) * np.sin(gamma_r)
+    #R[1, 1] = np.cos(alpha_r) * np.cos(beta_r) * np.cos(gamma_r) - np.sin(alpha_r) * np.sin(gamma_r)
+    #R[1, 2] = -np.cos(alpha_r) * np.sin(beta_r)
+    #R[2, 0] = np.sin(beta_r) * np.sin(gamma_r)
+    #R[2, 1] = np.cos(gamma_r) * np.sin(beta_r)
+    #R[2, 2] = np.cos(beta_r)
 
     alpha_m = np.random.uniform(0, np.pi / 4.0)
     beta_m = np.random.uniform(0, np.pi / 4.0)
@@ -192,9 +192,9 @@ def _homogeneous_deform(surface):
     M[2, 2] = np.cos(beta_m)
     
 
-    U = np.diagonal([lam1, lam2, lam3])
+    U = np.diag([lam1, lam2, lam3])
 
-    F = np.matmul(R, np.matmul(M, np.matmul(U, M.T)))
+    F = np.matmul(M, np.matmul(U, M.T))
 
     transform = vtk.vtkTransform()
     tmp = np.eye(4)
