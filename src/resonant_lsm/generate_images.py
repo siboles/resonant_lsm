@@ -162,9 +162,9 @@ def _homogeneous_deform(surface):
     #   alpha - rotation about reference z
     #   beta - rotation about reference x
     #   gamma - rotation about z
-    alpha_r = np.random.uniform(-np.pi / 12.0, np.pi / 12.0)
-    beta_r = np.random.uniform(-np.pi / 12.0, np.pi / 12.0)
-    gamma_r = np.random.uniform(-np.pi / 12.0, np.pi / 12.0)
+    alpha_r = np.random.uniform(-np.pi / 18.0, np.pi / 18.0)
+    beta_r = np.random.uniform(-np.pi / 36.0, np.pi / 36.0)
+    gamma_r = np.random.uniform(-np.pi / 18.0, np.pi / 18.0)
 
     R = np.zeros((3, 3), np.float64)
     R[0, 0] = np.cos(alpha_r) * np.cos(gamma_r) - np.cos(beta_r) * np.sin(alpha_r) * np.sin(gamma_r)
@@ -177,9 +177,9 @@ def _homogeneous_deform(surface):
     R[2, 1] = np.cos(gamma_r) * np.sin(beta_r)
     R[2, 2] = np.cos(beta_r)
 
-    alpha_m = np.random.uniform(-np.pi / 6.0, np.pi / 6.0)
-    beta_m = np.random.uniform(-np.pi / 6.0, np.pi / 6.0)
-    gamma_m = np.random.uniform(-np.pi / 6.0, np.pi / 6.0)
+    alpha_m = np.random.uniform(-np.pi, -np.pi)
+    beta_m = np.random.uniform(-np.pi / 2.0, np.pi / 2.0)
+    gamma_m = np.random.uniform(-np.pi, np.pi)
     M = np.zeros((3, 3), np.float64)
     M[0, 0] = np.cos(alpha_m) * np.cos(gamma_m) - np.cos(beta_m) * np.sin(alpha_m) * np.sin(gamma_m)
     M[0, 1] = -np.cos(alpha_m) * np.sin(gamma_m) - np.cos(beta_m) * np.cos(gamma_m) * np.sin(alpha_m)
