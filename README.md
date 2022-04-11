@@ -2,7 +2,9 @@
 
 This Python module is aimed at segmentation of cells from 3-D microscopy images 
 acquired with resonance scanning. These images have generally lower quality than 
-those acquired with traditional servo motor driven rasterization. 
+those acquired with traditional servo motor driven rasterization.
+
+[![DOI](https://zenodo.org/badge/387620689.svg)](https://zenodo.org/badge/latestdoi/387620689)
 
 # Installation
 
