@@ -49,7 +49,7 @@ def read_vtk_polydata(filepath):
     return reader.GetOutput()
 
 
-def main(surface_path_1, surface_path_2, output_name):
+def main(surface_path_1, surface_path_2):
     surface1 = read_vtk_polydata(surface_path_1)
     surface2 = read_vtk_polydata(surface_path_2)
     comparison = DataComparison(surface1, surface2)
